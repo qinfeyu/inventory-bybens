@@ -14,7 +14,7 @@ if (usePostgres) {
   });
   console.log('Database Client: Connected to Supabase PostgreSQL');
 } else {
-  const sqlite3 = require('sqlite3').verbose();
+  const sqlite3 = eval("require('sqlite3')").verbose();
   const dbPath = path.join(__dirname, '../database.sqlite');
   sqliteDb = new sqlite3.Database(dbPath);
   console.log('Database Client: Using local SQLite database file');
