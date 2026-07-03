@@ -122,3 +122,10 @@ export interface DashboardStats {
   lowStockCount: number;
   outOfStockCount: number;
 }
+
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  role: 'admin' | 'staff';
+}

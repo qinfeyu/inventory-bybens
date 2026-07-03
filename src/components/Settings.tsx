@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { ExchangeRates, CapitalAllocation, CapitalPoolOverride } from '../types';
+import React, { useState, useEffect } from 'react';
+import { ExchangeRates, CapitalAllocation, CapitalPoolOverride, User } from '../types';
+import { api } from '../utils/api';
 import { 
   Database,
   Download,
@@ -7,13 +8,18 @@ import {
   RefreshCw,
   Coins,
   Percent,
-  Trash2
+  Trash2,
+  Users,
+  UserPlus,
+  Shield,
+  Trash
 } from 'lucide-react';
 
 interface SettingsProps {
   rates: ExchangeRates;
   allocation: CapitalAllocation;
   poolOverride: CapitalPoolOverride;
+  currentUser: User;
   onUpdateRates: (rates: ExchangeRates) => void;
   onUpdateAllocation: (allocation: CapitalAllocation) => void;
   onUpdatePoolOverride: (override: CapitalPoolOverride) => void;
@@ -27,6 +33,7 @@ export const Settings: React.FC<SettingsProps> = ({
   rates,
   allocation,
   poolOverride,
+  currentUser,
   onUpdateRates,
   onUpdateAllocation,
   onUpdatePoolOverride,
@@ -36,7 +43,7 @@ export const Settings: React.FC<SettingsProps> = ({
   onExportData
 }) => {
   // Active settings sub-tab
-  const [activeSubTab, setActiveSubTab] = useState<'rates' | 'system'>('rates');
+  const [activeSubTab, setActiveSubTab] = useState<'rates' | 'system' | 'users'>('rates');
 
   // Rates Form State
   const [globalRate, setGlobalRate] = useState(rates.global);
@@ -48,8 +55,67 @@ export const Settings: React.FC<SettingsProps> = ({
   const [overrideEnabled, setOverrideEnabled] = useState(poolOverride.enabled);
   const [overrideValue, setOverrideValue] = useState(poolOverride.value);
 
+  // User Management State
+  const [usersList, setUsersList] = useState<User[]>([]);
+  const [newUsername, setNewUsername] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<'admin' | 'staff'>('admin');
+  const [userError, setUserError] = useState('');
+
   // File Input Ref for Import
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Fetch users list
+  const fetchUsers = () => {
+    api.getUsers()
+      .then(setUsersList)
+      .catch(err => console.error('Error fetching users:', err));
+  };
+
+  // Load users when entering the users tab
+  useEffect(() => {
+    if (activeSubTab === 'users') {
+      fetchUsers();
+    }
+  }, [activeSubTab]);
+
+  const handleCreateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUsername.trim() || !newEmail.trim() || !newPassword.trim()) {
+      setUserError('All fields are required.');
+      return;
+    }
+    setUserError('');
+    api.createUser({
+      username: newUsername.trim(),
+      email: newEmail.trim(),
+      password: newPassword,
+      role: newRole
+    })
+      .then(() => {
+        alert('🎉 User account created successfully!');
+        setNewUsername('');
+        setNewEmail('');
+        setNewPassword('');
+        fetchUsers();
+      })
+      .catch(err => {
+        setUserError(err.message || 'Error creating user account');
+      });
+  };
+
+  const handleDeleteUser = (id: string) => {
+    if (!confirm('Are you sure you want to delete this user account?')) return;
+    api.deleteUser(id)
+      .then(() => {
+        alert('User account deleted.');
+        fetchUsers();
+      })
+      .catch(err => {
+        alert(err.message || 'Error deleting user account');
+      });
+  };
 
   const handleSaveRates = (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,6 +188,16 @@ export const Settings: React.FC<SettingsProps> = ({
           <Database size={16} />
           System Maintenance
         </button>
+        {currentUser.role === 'admin' && (
+          <button 
+            className={`btn ${activeSubTab === 'users' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+            onClick={() => setActiveSubTab('users')}
+          >
+            <Users size={16} />
+            User Accounts
+          </button>
+        )}
       </div>
 
       {/* Rates & Financials */}
@@ -314,6 +390,137 @@ export const Settings: React.FC<SettingsProps> = ({
                 <Trash2 size={16} />
                 Wipe All Data
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Accounts Management */}
+      {activeSubTab === 'users' && currentUser.role === 'admin' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '24px' }}>
+          {/* Create User Form */}
+          <div className="glass-card" style={{ height: 'fit-content' }}>
+            <h4 style={{ marginBottom: '16px', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <UserPlus size={18} color="var(--primary)" />
+              Create User Account
+            </h4>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '20px' }}>
+              Add a new administrator or staff account. New users will be able to log in with these credentials immediately.
+            </p>
+
+            {userError && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '10px', borderRadius: '6px', color: '#f87171', fontSize: '0.8rem', marginBottom: '16px' }}>
+                {userError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateUser}>
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label htmlFor="new-username">Username</label>
+                <input 
+                  type="text" 
+                  id="new-username" 
+                  className="form-control"
+                  required
+                  placeholder="e.g. amine_fit"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label htmlFor="new-email">Email Address</label>
+                <input 
+                  type="email" 
+                  id="new-email" 
+                  className="form-control"
+                  required
+                  placeholder="e.g. amine@poty.com"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label htmlFor="new-password">Password</label>
+                <input 
+                  type="password" 
+                  id="new-password" 
+                  className="form-control"
+                  required
+                  placeholder="Enter secure password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
+                <label htmlFor="new-role">System Role</label>
+                <select 
+                  id="new-role" 
+                  className="form-control"
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value as 'admin' | 'staff')}
+                >
+                  <option value="admin">Administrator (Full Access)</option>
+                  <option value="staff">Staff (Sales/Inventory View Only)</option>
+                </select>
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+                <UserPlus size={16} /> Create Account
+              </button>
+            </form>
+          </div>
+
+          {/* Active Users Table */}
+          <div className="glass-card">
+            <h4 style={{ marginBottom: '16px', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Shield size={18} color="var(--success)" />
+              Active System Users
+            </h4>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '20px' }}>
+              A list of accounts authorized to access the POTY Business Portal.
+            </p>
+
+            <div className="table-container">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th style={{ width: '60px' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usersList.map(u => (
+                    <tr key={u.id}>
+                      <td style={{ fontWeight: 600 }}>{u.username}</td>
+                      <td>{u.email}</td>
+                      <td>
+                        <span className={`badge ${u.role === 'admin' ? 'badge-primary' : 'badge-secondary'}`}>
+                          {u.role.toUpperCase()}
+                        </span>
+                      </td>
+                      <td>
+                        {u.id !== currentUser.id ? (
+                          <button 
+                            className="btn btn-danger btn-icon" 
+                            style={{ padding: '4px', color: 'var(--danger)', background: 'none', border: 'none' }}
+                            onClick={() => handleDeleteUser(u.id)}
+                            title="Delete user account"
+                          >
+                            <Trash size={16} />
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>You</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

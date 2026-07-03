@@ -1,6 +1,18 @@
-import { Product, Sale, Expense, ExchangeRates, CapitalAllocation, CapitalPoolOverride, Customer, PreOrder } from '../types';
+import { Product, Sale, Expense, ExchangeRates, CapitalAllocation, CapitalPoolOverride, Customer, PreOrder, User } from '../types';
 
 const API_BASE = '/api';
+
+// Override global fetch inside this module to automatically attach the Authorization token
+const originalFetch = window.fetch;
+const fetchWrapper = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const token = localStorage.getItem('poty_auth_token');
+  const headers = {
+    ...init?.headers,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  };
+  return originalFetch(input, { ...init, headers });
+};
+const fetch = fetchWrapper;
 
 // Helper to handle fetch responses
 const handleResponse = async (response: Response) => {
@@ -143,5 +155,31 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
+    }).then(handleResponse),
+
+  // 8. Auth & User Management API
+  login: (usernameOrEmail: string, password: string): Promise<{ token: string; user: User }> =>
+    fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usernameOrEmail, password })
+    }).then(handleResponse),
+
+  getCurrentUser: (): Promise<User> =>
+    fetch(`${API_BASE}/auth/me`).then(handleResponse),
+
+  getUsers: (): Promise<User[]> =>
+    fetch(`${API_BASE}/users`).then(handleResponse),
+
+  createUser: (user: Omit<User, 'id'> & { password?: string }): Promise<{ success: boolean; user: User }> =>
+    fetch(`${API_BASE}/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(user)
+    }).then(handleResponse),
+
+  deleteUser: (id: string): Promise<{ success: boolean }> =>
+    fetch(`${API_BASE}/users/${id}`, {
+      method: 'DELETE'
     }).then(handleResponse)
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Product, Sale, Expense, ExchangeRates, CapitalAllocation, CapitalPoolOverride, DashboardStats, Customer, PreOrder } from './types';
+import { Product, Sale, Expense, ExchangeRates, CapitalAllocation, CapitalPoolOverride, DashboardStats, Customer, PreOrder, User } from './types';
 import { 
   initialProducts, 
   initialSales, 
@@ -17,6 +17,7 @@ import { Expenses } from './components/Expenses';
 import { Settings } from './components/Settings';
 import { Customers } from './components/Customers';
 import { PreOrders } from './components/PreOrders';
+import { Login } from './components/Login';
 import { 
   LayoutDashboard, 
   ShoppingBag, 
@@ -25,7 +26,8 @@ import {
   Layers,
   Apple,
   Users,
-  Clock
+  Clock,
+  LogOut
 } from 'lucide-react';
 
 // Helper to safely extract error messages in TypeScript
@@ -39,6 +41,11 @@ export const App: React.FC = () => {
   // Navigation State
   const [activeTab, setActiveTab] = useState<string>('dashboard');
 
+  // Authentication State
+  const [token, setToken] = useState<string | null>(localStorage.getItem('poty_auth_token'));
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   // Core Data States
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -49,42 +56,75 @@ export const App: React.FC = () => {
   const [capitalAllocation, setCapitalAllocation] = useState<CapitalAllocation>(defaultCapitalAllocation);
   const [capitalPoolOverride, setCapitalPoolOverride] = useState<CapitalPoolOverride>({ enabled: false, value: 0 });
 
-  // Load from Backend SQLite Database on Mount
+  const handleLogout = () => {
+    localStorage.removeItem('poty_auth_token');
+    setToken(null);
+    setCurrentUser(null);
+    setProducts([]);
+    setSales([]);
+    setExpenses([]);
+    setCustomers([]);
+    setPreOrders([]);
+  };
+
+  const handleLoginSuccess = (newToken: string, user: User) => {
+    localStorage.setItem('poty_auth_token', newToken);
+    setToken(newToken);
+    setCurrentUser(user);
+  };
+
+  // Load from Backend Database
+  const loadDatabase = async () => {
+    try {
+      const fetchedProducts = await api.getProducts();
+      const fetchedSales = await api.getSales();
+      const fetchedExpenses = await api.getExpenses();
+      const fetchedCustomers = await api.getCustomers();
+      const fetchedPreOrders = await api.getPreOrders();
+      const settings = await api.getSettings();
+
+      setProducts(fetchedProducts);
+      setSales(fetchedSales);
+      setExpenses(fetchedExpenses);
+      setCustomers(fetchedCustomers);
+      setPreOrders(fetchedPreOrders);
+      
+      if (settings.exchangeRates) setExchangeRates(settings.exchangeRates);
+      if (settings.capitalAllocation) setCapitalAllocation(settings.capitalAllocation);
+      if (settings.capitalPoolOverride) setCapitalPoolOverride(settings.capitalPoolOverride);
+    } catch (err) {
+      console.error('Error loading data, using local fallback:', err);
+      // Fallback to mock data if backend is offline
+      setProducts(initialProducts);
+      setSales(initialSales);
+      setExpenses(initialExpenses);
+      setCustomers(initialCustomers);
+      setPreOrders(initialPreOrders);
+      setExchangeRates(defaultExchangeRates);
+      setCapitalAllocation(defaultCapitalAllocation);
+      setCapitalPoolOverride({ enabled: false, value: 0 });
+    }
+  };
+
+  // Verify token on boot & load database if authenticated
   useEffect(() => {
-    const loadDatabase = async () => {
-      try {
-        const fetchedProducts = await api.getProducts();
-        const fetchedSales = await api.getSales();
-        const fetchedExpenses = await api.getExpenses();
-        const fetchedCustomers = await api.getCustomers();
-        const fetchedPreOrders = await api.getPreOrders();
-        const settings = await api.getSettings();
-
-        setProducts(fetchedProducts);
-        setSales(fetchedSales);
-        setExpenses(fetchedExpenses);
-        setCustomers(fetchedCustomers);
-        setPreOrders(fetchedPreOrders);
-        
-        if (settings.exchangeRates) setExchangeRates(settings.exchangeRates);
-        if (settings.capitalAllocation) setCapitalAllocation(settings.capitalAllocation);
-        if (settings.capitalPoolOverride) setCapitalPoolOverride(settings.capitalPoolOverride);
-      } catch (err) {
-        console.error('Error loading data from SQLite, using local fallback:', err);
-        // Fallback to mock data if backend is offline
-        setProducts(initialProducts);
-        setSales(initialSales);
-        setExpenses(initialExpenses);
-        setCustomers(initialCustomers);
-        setPreOrders(initialPreOrders);
-        setExchangeRates(defaultExchangeRates);
-        setCapitalAllocation(defaultCapitalAllocation);
-        setCapitalPoolOverride({ enabled: false, value: 0 });
-      }
-    };
-
-    loadDatabase();
-  }, []);
+    if (token) {
+      api.getCurrentUser()
+        .then(user => {
+          setCurrentUser(user);
+          loadDatabase();
+        })
+        .catch(err => {
+          console.error('Token validation failed:', err);
+          handleLogout();
+        })
+        .finally(() => {
+          setAuthLoading(false);
+        });
+    } else {
+      setAuthLoading(false);
+    }
+  }, [token]);
 
   // Calculate Dashboard Statistics
   const stats: DashboardStats = React.useMemo(() => {
@@ -540,6 +580,19 @@ export const App: React.FC = () => {
     return true;
   };
 
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0e0e11', color: 'white' }}>
+        <div style={{ width: '40px', height: '40px', border: '3px solid rgba(255,255,255,0.1)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (!token || !currentUser) {
+    return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="app-container">
       {/* Sidebar navigation */}
@@ -651,8 +704,25 @@ export const App: React.FC = () => {
           </li>
         </ul>
 
-        <div className="sidebar-footer">
-          <div className="rate-info">
+        <div className="sidebar-footer" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', fontWeight: 'bold', color: 'white', flexShrink: 0 }}>
+              {currentUser.username.substring(0, 2).toUpperCase()}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentUser.username}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{currentUser.role}</span>
+            </div>
+            <button 
+              onClick={handleLogout}
+              className="btn btn-secondary btn-icon"
+              style={{ padding: '6px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              title="Sign Out"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+          <div className="rate-info" style={{ marginTop: '4px' }}>
             <span className="rate-title">Global Rate</span>
             <span className="rate-val">1€ = {exchangeRates.global} DZD</span>
           </div>
@@ -770,6 +840,7 @@ export const App: React.FC = () => {
             rates={exchangeRates}
             allocation={capitalAllocation}
             poolOverride={capitalPoolOverride}
+            currentUser={currentUser!}
             onUpdateRates={handleUpdateExchangeRates}
             onUpdateAllocation={handleUpdateAllocation}
             onUpdatePoolOverride={handleUpdateCapitalPoolOverride}

@@ -18,10 +18,134 @@ if (!process.env.DATABASE_URL) {
   });
 }
 
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const JWT_SECRET = process.env.JWT_SECRET || 'poty_portal_default_jwt_secret_key_98765';
+
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Authorization token required' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired authorization token' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
 // --- API Routes ---
 
+// Authentication Endpoints
+app.post('/api/auth/login', async (req, res) => {
+  const { usernameOrEmail, password } = req.body;
+  try {
+    const user = await dbHelper.get(`
+      SELECT * FROM users 
+      WHERE username = ? OR email = ?
+    `, [usernameOrEmail, usernameOrEmail]);
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid username/email or password' });
+    }
+
+    const validPassword = bcrypt.compareSync(password, user.password);
+    if (!validPassword) {
+      return res.status(400).json({ error: 'Invalid username/email or password' });
+    }
+
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await dbHelper.get('SELECT id, username, email, role FROM users WHERE id = ?', [req.user.id]);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// User Management Endpoints (Admin only)
+app.get('/api/users', authenticateToken, async (req, res) => {
+  try {
+    const users = await dbHelper.all('SELECT id, username, email, role FROM users ORDER BY username ASC');
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/users', authenticateToken, async (req, res) => {
+  const { username, email, password, role } = req.body;
+  if (!username || !email || !password) {
+    return res.status(400).json({ error: 'Username, email, and password are required' });
+  }
+  try {
+    const existing = await dbHelper.get('SELECT * FROM users WHERE username = ? OR email = ?', [username, email]);
+    if (existing) {
+      return res.status(400).json({ error: 'Username or email already exists' });
+    }
+
+    const id = `user-${Date.now()}`;
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    await dbHelper.run(`
+      INSERT INTO users (id, username, email, password, role)
+      VALUES (?, ?, ?, ?, ?)
+    `, [id, username, email, hashedPassword, role || 'admin']);
+
+    res.json({
+      success: true,
+      user: { id, username, email, role: role || 'admin' }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/users/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    if (id === req.user.id) {
+      return res.status(400).json({ error: 'You cannot delete your own account' });
+    }
+
+    const adminsCount = await dbHelper.get("SELECT COUNT(*) as count FROM users WHERE role = 'admin'");
+    const targetUser = await dbHelper.get("SELECT role FROM users WHERE id = ?", [id]);
+    if (targetUser && targetUser.role === 'admin' && adminsCount.count <= 1) {
+      return res.status(400).json({ error: 'Cannot delete the last administrator account' });
+    }
+
+    await dbHelper.run('DELETE FROM users WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 1. Products API
-app.get('/api/products', async (req, res) => {
+app.get('/api/products', authenticateToken, async (req, res) => {
   try {
     const products = await dbHelper.all('SELECT * FROM products ORDER BY createdAt DESC');
     // Map archived integer back to boolean
@@ -35,7 +159,7 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-app.post('/api/products', async (req, res) => {
+app.post('/api/products', authenticateToken, async (req, res) => {
   const p = req.body;
   try {
     await dbHelper.run(`
@@ -48,7 +172,7 @@ app.post('/api/products', async (req, res) => {
   }
 });
 
-app.post('/api/products/bulk', async (req, res) => {
+app.post('/api/products/bulk', authenticateToken, async (req, res) => {
   const products = req.body;
   if (!Array.isArray(products)) {
     return res.status(400).json({ error: 'Body must be an array of products' });
@@ -92,7 +216,7 @@ app.post('/api/products/bulk', async (req, res) => {
   }
 });
 
-app.put('/api/products/:id', async (req, res) => {
+app.put('/api/products/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const p = req.body;
   try {
@@ -107,7 +231,7 @@ app.put('/api/products/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/products/:id', async (req, res) => {
+app.delete('/api/products/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
     // Archive product
@@ -119,7 +243,7 @@ app.delete('/api/products/:id', async (req, res) => {
 });
 
 // 2. Customers API
-app.get('/api/customers', async (req, res) => {
+app.get('/api/customers', authenticateToken, async (req, res) => {
   try {
     const customers = await dbHelper.all('SELECT * FROM customers ORDER BY name ASC');
     res.json(customers);
@@ -128,7 +252,7 @@ app.get('/api/customers', async (req, res) => {
   }
 });
 
-app.post('/api/customers', async (req, res) => {
+app.post('/api/customers', authenticateToken, async (req, res) => {
   const c = req.body;
   try {
     await dbHelper.run(`
@@ -141,7 +265,7 @@ app.post('/api/customers', async (req, res) => {
   }
 });
 
-app.put('/api/customers/:id', async (req, res) => {
+app.put('/api/customers/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const c = req.body;
   try {
@@ -156,7 +280,7 @@ app.put('/api/customers/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/customers/:id', async (req, res) => {
+app.delete('/api/customers/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
     await dbHelper.run('DELETE FROM customers WHERE id = ?', [id]);
@@ -167,7 +291,7 @@ app.delete('/api/customers/:id', async (req, res) => {
 });
 
 // 3. Sales API (Multi-item)
-app.get('/api/sales', async (req, res) => {
+app.get('/api/sales', authenticateToken, async (req, res) => {
   try {
     const sales = await dbHelper.all('SELECT * FROM sales ORDER BY date DESC');
     const items = await dbHelper.all('SELECT * FROM sale_items');
@@ -183,7 +307,7 @@ app.get('/api/sales', async (req, res) => {
   }
 });
 
-app.post('/api/sales', async (req, res) => {
+app.post('/api/sales', authenticateToken, async (req, res) => {
   const s = req.body;
   try {
     // Start Transaction manually
@@ -217,7 +341,7 @@ app.post('/api/sales', async (req, res) => {
   }
 });
 
-app.delete('/api/sales/:id', async (req, res) => {
+app.delete('/api/sales/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
     await dbHelper.run('BEGIN TRANSACTION');
@@ -245,7 +369,7 @@ app.delete('/api/sales/:id', async (req, res) => {
 });
 
 // 5. Pre-Orders API (Multi-item)
-app.get('/api/preorders', async (req, res) => {
+app.get('/api/preorders', authenticateToken, async (req, res) => {
   try {
     const preorders = await dbHelper.all('SELECT * FROM pre_orders ORDER BY date DESC');
     const items = await dbHelper.all('SELECT * FROM pre_order_items');
@@ -260,7 +384,7 @@ app.get('/api/preorders', async (req, res) => {
   }
 });
 
-app.post('/api/preorders', async (req, res) => {
+app.post('/api/preorders', authenticateToken, async (req, res) => {
   const po = req.body;
   try {
     await dbHelper.run('BEGIN TRANSACTION');
@@ -286,7 +410,7 @@ app.post('/api/preorders', async (req, res) => {
   }
 });
 
-app.put('/api/preorders/:id', async (req, res) => {
+app.put('/api/preorders/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const po = req.body;
   try {
@@ -317,7 +441,7 @@ app.put('/api/preorders/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/preorders/:id', async (req, res) => {
+app.delete('/api/preorders/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
     await dbHelper.run('BEGIN TRANSACTION');
@@ -332,7 +456,7 @@ app.delete('/api/preorders/:id', async (req, res) => {
 });
 
 // 5. Expenses API
-app.get('/api/expenses', async (req, res) => {
+app.get('/api/expenses', authenticateToken, async (req, res) => {
   try {
     const expenses = await dbHelper.all('SELECT * FROM expenses ORDER BY date DESC');
     res.json(expenses);
@@ -341,7 +465,7 @@ app.get('/api/expenses', async (req, res) => {
   }
 });
 
-app.post('/api/expenses', async (req, res) => {
+app.post('/api/expenses', authenticateToken, async (req, res) => {
   const e = req.body;
   try {
     await dbHelper.run(`
@@ -354,7 +478,7 @@ app.post('/api/expenses', async (req, res) => {
   }
 });
 
-app.delete('/api/expenses/:id', async (req, res) => {
+app.delete('/api/expenses/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
     await dbHelper.run('DELETE FROM expenses WHERE id = ?', [id]);
@@ -365,7 +489,7 @@ app.delete('/api/expenses/:id', async (req, res) => {
 });
 
 // 6. Settings API
-app.get('/api/settings', async (req, res) => {
+app.get('/api/settings', authenticateToken, async (req, res) => {
   try {
     const settings = await dbHelper.all('SELECT * FROM settings');
     const response = {};
@@ -378,7 +502,7 @@ app.get('/api/settings', async (req, res) => {
   }
 });
 
-app.post('/api/settings', async (req, res) => {
+app.post('/api/settings', authenticateToken, async (req, res) => {
   const { key, value } = req.body;
   try {
     await dbHelper.run(`
@@ -393,7 +517,7 @@ app.post('/api/settings', async (req, res) => {
 });
 
 // 7. Bulk Maintenance API (Reset / Wipe / Import)
-app.post('/api/maintenance/reset', async (req, res) => {
+app.post('/api/maintenance/reset', authenticateToken, async (req, res) => {
   try {
     // Drop child tables first
     await dbHelper.run('DROP TABLE IF EXISTS sale_items');
@@ -414,7 +538,7 @@ app.post('/api/maintenance/reset', async (req, res) => {
   }
 });
 
-app.post('/api/maintenance/clear', async (req, res) => {
+app.post('/api/maintenance/clear', authenticateToken, async (req, res) => {
   try {
     // Delete from child tables first
     await dbHelper.run('DELETE FROM sale_items');
@@ -432,7 +556,7 @@ app.post('/api/maintenance/clear', async (req, res) => {
   }
 });
 
-app.post('/api/maintenance/import', async (req, res) => {
+app.post('/api/maintenance/import', authenticateToken, async (req, res) => {
   const data = req.body;
   try {
     await dbHelper.run('BEGIN TRANSACTION');

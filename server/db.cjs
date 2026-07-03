@@ -260,9 +260,32 @@ const initDb = async () => {
       value TEXT NOT NULL
     )
   `);
+
+  // 9. Users Table
+  await run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT DEFAULT 'admin'
+    )
+  `);
 };
 
 const seedData = async () => {
+  // Ensure default admin user is seeded
+  const userCount = await get('SELECT COUNT(*) as count FROM users');
+  if (userCount.count === 0) {
+    console.log('Seeding default administrator account...');
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = bcrypt.hashSync('admin', 10);
+    await run(`
+      INSERT INTO users (id, username, email, password, role)
+      VALUES ('user-admin', 'admin', 'admin@poty.com', ?, 'admin')
+    `, [hashedPassword]);
+  }
+
   const productCount = await get('SELECT COUNT(*) as count FROM products');
   if (productCount.count > 0) {
     console.log('Database already has data. Skipping seed.');
