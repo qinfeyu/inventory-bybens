@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Product, Sale, Expense, ExchangeRates, CapitalAllocation, CapitalPoolOverride, DashboardStats, Customer, PreOrder, User } from './types';
 import { 
   initialProducts, 
@@ -27,7 +27,10 @@ import {
   Apple,
   Users,
   Clock,
-  LogOut
+  LogOut,
+  Menu,
+  X,
+  ChevronRight
 } from 'lucide-react';
 
 // Helper to safely extract error messages in TypeScript
@@ -40,6 +43,12 @@ const getErrorMessage = (err: unknown): string => {
 export const App: React.FC = () => {
   // Navigation State
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navigate = useCallback((tab: string) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+  }, []);
 
   // Authentication State
   const [token, setToken] = useState<string | null>(localStorage.getItem('poty_auth_token'));
@@ -593,9 +602,12 @@ export const App: React.FC = () => {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
+  const primaryNavTabs = ['dashboard', 'Supplements', 'Snacks', 'customers', 'preorders'];
+  const isMoreActive = !primaryNavTabs.includes(activeTab);
+
   return (
     <div className="app-container">
-      {/* Sidebar navigation */}
+      {/* Sidebar navigation — desktop only */}
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="logo-icon">
@@ -611,7 +623,7 @@ export const App: React.FC = () => {
           <li>
             <div 
               className={`menu-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setActiveTab('dashboard')}
+              onClick={() => navigate('dashboard')}
             >
               <LayoutDashboard size={18} />
               <span>Dashboard</span>
@@ -623,7 +635,7 @@ export const App: React.FC = () => {
           <li>
             <div 
               className={`menu-item ${activeTab === 'Supplements' ? 'active' : ''}`}
-              onClick={() => setActiveTab('Supplements')}
+              onClick={() => navigate('Supplements')}
             >
               <Apple size={18} />
               <span>Supplements</span>
@@ -632,7 +644,7 @@ export const App: React.FC = () => {
           <li>
             <div 
               className={`menu-item ${activeTab === 'Snacks' ? 'active' : ''}`}
-              onClick={() => setActiveTab('Snacks')}
+              onClick={() => navigate('Snacks')}
             >
               <Layers size={18} />
               <span>Snacks & Fitness</span>
@@ -644,7 +656,7 @@ export const App: React.FC = () => {
           <li>
             <div 
               className={`menu-item ${activeTab === 'customers' ? 'active' : ''}`}
-              onClick={() => setActiveTab('customers')}
+              onClick={() => navigate('customers')}
             >
               <Users size={18} />
               <span>Customers</span>
@@ -654,7 +666,7 @@ export const App: React.FC = () => {
           <li>
             <div 
               className={`menu-item ${activeTab === 'preorders' ? 'active' : ''}`}
-              onClick={() => setActiveTab('preorders')}
+              onClick={() => navigate('preorders')}
             >
               <Clock size={18} />
               <span>Pre-Orders</span>
@@ -666,7 +678,7 @@ export const App: React.FC = () => {
           <li>
             <div 
               className={`menu-item ${activeTab === 'supplements_sales' ? 'active' : ''}`}
-              onClick={() => setActiveTab('supplements_sales')}
+              onClick={() => navigate('supplements_sales')}
             >
               <ShoppingBag size={18} style={{ color: '#10b981' }} />
               <span>Supplements Sales</span>
@@ -675,7 +687,7 @@ export const App: React.FC = () => {
           <li>
             <div 
               className={`menu-item ${activeTab === 'snacks_sales' ? 'active' : ''}`}
-              onClick={() => setActiveTab('snacks_sales')}
+              onClick={() => navigate('snacks_sales')}
             >
               <ShoppingBag size={18} style={{ color: '#a855f7' }} />
               <span>Snacks Sales</span>
@@ -684,7 +696,7 @@ export const App: React.FC = () => {
           <li>
             <div 
               className={`menu-item ${activeTab === 'expenses' ? 'active' : ''}`}
-              onClick={() => setActiveTab('expenses')}
+              onClick={() => navigate('expenses')}
             >
               <DollarSign size={18} />
               <span>Global Expenses</span>
@@ -696,7 +708,7 @@ export const App: React.FC = () => {
           <li>
             <div 
               className={`menu-item ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('settings')}
+              onClick={() => navigate('settings')}
             >
               <SettingsIcon size={18} />
               <span>Settings & Rates</span>
@@ -728,6 +740,77 @@ export const App: React.FC = () => {
           </div>
         </div>
       </aside>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <nav className="mobile-bottom-nav">
+        <button className={`mobile-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('dashboard')}>
+          <LayoutDashboard size={20} />
+          <span>Dashboard</span>
+        </button>
+        <button className={`mobile-nav-item ${activeTab === 'Supplements' ? 'active' : ''}`} onClick={() => navigate('Supplements')}>
+          <Apple size={20} />
+          <span>Supps</span>
+        </button>
+        <button className={`mobile-nav-item ${activeTab === 'Snacks' ? 'active' : ''}`} onClick={() => navigate('Snacks')}>
+          <Layers size={20} />
+          <span>Snacks</span>
+        </button>
+        <button className={`mobile-nav-item ${activeTab === 'customers' ? 'active' : ''}`} onClick={() => navigate('customers')}>
+          <Users size={20} />
+          <span>Customers</span>
+        </button>
+        <button className={`mobile-nav-item ${isMoreActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(true)}>
+          <Menu size={20} />
+          <span>More</span>
+        </button>
+      </nav>
+
+      {/* Mobile More Menu Overlay */}
+      {mobileMenuOpen && (
+        <div className="mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
+          <div className="mobile-menu-drawer" onClick={e => e.stopPropagation()}>
+            <div className="mobile-menu-drawer-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', fontWeight: 'bold', color: 'white' }}>
+                  {currentUser.username.substring(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'white' }}>{currentUser.username}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{currentUser.role} · 1€ = {exchangeRates.global} DZD</div>
+                </div>
+              </div>
+              <button className="mobile-menu-close" onClick={() => setMobileMenuOpen(false)}><X size={20} /></button>
+            </div>
+
+            <div className="mobile-menu-section-title">Directories</div>
+            <button className={`mobile-menu-item ${activeTab === 'preorders' ? 'active' : ''}`} onClick={() => navigate('preorders')}>
+              <Clock size={18} /><span>Pre-Orders</span><ChevronRight size={16} className="mobile-menu-chevron" />
+            </button>
+
+            <div className="mobile-menu-section-title">Transactions</div>
+            <button className={`mobile-menu-item ${activeTab === 'supplements_sales' ? 'active' : ''}`} onClick={() => navigate('supplements_sales')}>
+              <ShoppingBag size={18} style={{ color: '#10b981' }} /><span>Supplements Sales</span><ChevronRight size={16} className="mobile-menu-chevron" />
+            </button>
+            <button className={`mobile-menu-item ${activeTab === 'snacks_sales' ? 'active' : ''}`} onClick={() => navigate('snacks_sales')}>
+              <ShoppingBag size={18} style={{ color: '#a855f7' }} /><span>Snacks Sales</span><ChevronRight size={16} className="mobile-menu-chevron" />
+            </button>
+            <button className={`mobile-menu-item ${activeTab === 'expenses' ? 'active' : ''}`} onClick={() => navigate('expenses')}>
+              <DollarSign size={18} /><span>Global Expenses</span><ChevronRight size={16} className="mobile-menu-chevron" />
+            </button>
+
+            <div className="mobile-menu-section-title">System</div>
+            <button className={`mobile-menu-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}>
+              <SettingsIcon size={18} /><span>Settings & Rates</span><ChevronRight size={16} className="mobile-menu-chevron" />
+            </button>
+
+            <div style={{ marginTop: 'auto', padding: '16px' }}>
+              <button onClick={handleLogout} className="btn btn-secondary" style={{ width: '100%', gap: '8px', justifyContent: 'center' }}>
+                <LogOut size={16} /> Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <main className="main-content">
