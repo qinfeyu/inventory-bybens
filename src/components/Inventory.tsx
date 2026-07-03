@@ -201,7 +201,29 @@ export const Inventory: React.FC<InventoryProps> = ({
 
   const handleModalSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingProduct) return;
+
+    if (!editingProduct) {
+      // Mobile "Add Product" flow
+      onAddProduct({
+        sku: formData.sku,
+        name: formData.name,
+        brand: formData.brand || 'Generic',
+        category,
+        variant: formData.variant || 'Default',
+        size: formData.size || 'N/A',
+        originalCostEur: formData.originalCostEur,
+        exchangeRate: formData.exchangeRate,
+        deliveryCostDzd: formData.deliveryCostDzd,
+        retailPriceDzd: formData.retailPriceDzd,
+        quantityPurchased: formData.quantityPurchased,
+        quantitySold: formData.quantitySold,
+        description: formData.description || '',
+        prozisLink: category === 'Snacks' ? formData.prozisLink : undefined,
+        weightAlloc: category === 'Snacks' ? formData.weightAlloc : undefined
+      });
+      setIsModalOpen(false);
+      return;
+    }
 
     onUpdateProduct({
       ...editingProduct,
@@ -477,19 +499,19 @@ export const Inventory: React.FC<InventoryProps> = ({
             <option value="OutOfStock">Out of Stock (0)</option>
           </select>
 
-          {/* Spreadsheet Mode Toggle */}
+          {/* Spreadsheet Mode Toggle — desktop only */}
           <button 
-            className={`btn ${isSpreadsheetMode ? 'btn-primary' : 'btn-secondary'}`}
+            className={`btn ${isSpreadsheetMode ? 'btn-primary' : 'btn-secondary'} inv-desktop-only`}
             onClick={() => setIsSpreadsheetMode(!isSpreadsheetMode)}
             title="Toggle Excel-like editing"
           >
             <FileSpreadsheet size={18} />
-            {isSpreadsheetMode ? 'Close Spreadsheet Mode' : 'Spreadsheet Mode'}
+            {isSpreadsheetMode ? 'Close Spreadsheet' : 'Spreadsheet Mode'}
           </button>
 
           {/* Export */}
           <button 
-            className="btn btn-secondary"
+            className="btn btn-secondary inv-desktop-only"
             onClick={exportToCSV}
             title="Export this sheet to CSV"
           >
@@ -498,17 +520,29 @@ export const Inventory: React.FC<InventoryProps> = ({
 
           {/* Import */}
           <button 
-            className="btn btn-secondary"
+            className="btn btn-secondary inv-desktop-only"
             onClick={() => setIsImportModalOpen(true)}
             title="Import products from a CSV file"
           >
             Import CSV
           </button>
+
+          {/* Mobile: Add Product button */}
+          <button
+            className="btn btn-primary inv-mobile-only"
+            onClick={() => {
+              setEditingProduct(null);
+              setFormData({ sku: quickAdd.sku, name: '', brand: '', description: '', variant: '', size: '', originalCostEur: 0, exchangeRate: 250, deliveryCostDzd: 0, retailPriceDzd: 0, quantityPurchased: 0, quantitySold: 0, prozisLink: '', weightAlloc: 0 });
+              setIsModalOpen(true);
+            }}
+          >
+            <Plus size={18} /> Add Product
+          </button>
         </div>
       </div>
 
-      {/* Main Inventory Table */}
-      <div className="glass-card table-card">
+      {/* ── DESKTOP: Full Spreadsheet Table ── */}
+      <div className="glass-card table-card inv-desktop-only">
         <div className="table-container">
           <table className="custom-table spreadsheet-table">
             <thead>
@@ -945,12 +979,113 @@ export const Inventory: React.FC<InventoryProps> = ({
         </div>
       </div>
 
+      {/* ── MOBILE: Product Cards ── */}
+      <div className="inv-mobile-only">
+        {sortedProducts.length === 0 ? (
+          <div className="glass-card" style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-secondary)' }}>
+            <div style={{ fontSize: '2rem', marginBottom: '12px' }}>📦</div>
+            <div style={{ fontWeight: 600 }}>No products found</div>
+            <div style={{ fontSize: '0.85rem', marginTop: '6px' }}>Tap "Add Product" above to get started.</div>
+          </div>
+        ) : (
+          <div className="inv-card-list">
+            {sortedProducts.map(product => {
+              const marginDzd = product.retailPriceDzd - product.landedCostDzd;
+              const marginPct = product.retailPriceDzd > 0 ? (marginDzd / product.retailPriceDzd) * 100 : 0;
+              const isOut = product.remainingStock === 0;
+              const isLow = product.remainingStock > 0 && product.remainingStock <= 3;
+
+              return (
+                <div key={product.id} className={`inv-product-card glass-card ${isOut ? 'inv-card-out' : isLow ? 'inv-card-low' : ''}`}>
+                  {/* Card Header */}
+                  <div className="inv-card-header">
+                    <div className="inv-card-title-block">
+                      <div className="inv-card-name">{product.name}</div>
+                      <div className="inv-card-meta">
+                        <span className="badge badge-secondary">{product.brand}</span>
+                        <span className="badge badge-secondary">{product.size}</span>
+                        {product.variant && product.variant !== 'Default' && (
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{product.variant}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="inv-card-stock-badge">
+                      <span style={{ fontSize: '1.5rem', fontWeight: 800, color: isOut ? 'var(--danger)' : isLow ? 'var(--warning)' : 'var(--success)' }}>
+                        {product.remainingStock}
+                      </span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>left</span>
+                      {isOut && <span className="badge badge-danger" style={{ fontSize: '0.6rem' }}>Out</span>}
+                      {isLow && <span className="badge badge-warning" style={{ fontSize: '0.6rem' }}>Low</span>}
+                    </div>
+                  </div>
+
+                  {/* Card Stats Row */}
+                  <div className="inv-card-stats">
+                    <div className="inv-card-stat">
+                      <span className="inv-card-stat-label">Cost</span>
+                      <span className="inv-card-stat-value">{product.originalCostEur.toFixed(2)} €</span>
+                    </div>
+                    <div className="inv-card-stat">
+                      <span className="inv-card-stat-label">Landed</span>
+                      <span className="inv-card-stat-value">{product.landedCostDzd.toLocaleString(undefined, { maximumFractionDigits: 0 })} DZ</span>
+                    </div>
+                    <div className="inv-card-stat">
+                      <span className="inv-card-stat-label">Retail</span>
+                      <span className="inv-card-stat-value" style={{ fontWeight: 700 }}>{product.retailPriceDzd.toLocaleString()} DZ</span>
+                    </div>
+                    <div className="inv-card-stat">
+                      <span className="inv-card-stat-label">Margin</span>
+                      <span className={`inv-card-stat-value ${marginDzd >= 0 ? 'text-success' : 'text-danger'}`}>
+                        {marginDzd >= 0 ? '+' : ''}{marginDzd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        <span style={{ fontSize: '0.65rem', opacity: 0.7 }}> ({marginPct.toFixed(0)}%)</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Footer: SKU + sold info + actions */}
+                  <div className="inv-card-footer">
+                    <div>
+                      <span className="font-mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{product.sku}</span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                        {product.quantitySold} sold / {product.quantityPurchased} bought
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {isSnacks && product.prozisLink && (
+                        <a href={product.prozisLink} target="_blank" rel="noopener noreferrer" className="prozis-link-badge">
+                          Prozis <ExternalLink size={10} />
+                        </a>
+                      )}
+                      <button 
+                        className="btn btn-secondary btn-icon"
+                        onClick={() => openEditModal(product)}
+                        title="Edit"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button 
+                        className="btn btn-icon"
+                        style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.2)' }}
+                        onClick={() => handleDelete(product.id, product.name)}
+                        title="Archive"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Add / Edit Product Modal (Fallback for detailed edits) */}
       {isModalOpen && (
         <div className="modal-backdrop">
           <div className="modal-container glass-card">
             <div className="modal-header">
-              <h2>Edit Product Details</h2>
+              <h2>{editingProduct ? 'Edit Product Details' : 'Add New Product'}</h2>
               <button className="modal-close" onClick={() => setIsModalOpen(false)}>
                 <X size={24} />
               </button>
