@@ -87,6 +87,31 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   }
 });
 
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Current password and new password are required' });
+  }
+  try {
+    const user = await dbHelper.get('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const validPassword = bcrypt.compareSync(currentPassword, user.password);
+    if (!validPassword) {
+      return res.status(400).json({ error: 'Incorrect current password' });
+    }
+
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
+    await dbHelper.run('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id]);
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // User Management Endpoints (Admin only)
 app.get('/api/users', authenticateToken, async (req, res) => {
   try {

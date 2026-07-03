@@ -168,6 +168,13 @@ export const api = {
   getCurrentUser: (): Promise<User> =>
     fetch(`${API_BASE}/auth/me`).then(handleResponse),
 
+  changePassword: (currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> =>
+    fetch(`${API_BASE}/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword })
+    }).then(handleResponse),
+
   getUsers: (): Promise<User[]> =>
     fetch(`${API_BASE}/users`).then(handleResponse),
 

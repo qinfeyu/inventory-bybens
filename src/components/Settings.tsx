@@ -12,7 +12,8 @@ import {
   Users,
   UserPlus,
   Shield,
-  Trash
+  Trash,
+  Lock
 } from 'lucide-react';
 
 interface SettingsProps {
@@ -43,7 +44,7 @@ export const Settings: React.FC<SettingsProps> = ({
   onExportData
 }) => {
   // Active settings sub-tab
-  const [activeSubTab, setActiveSubTab] = useState<'rates' | 'system' | 'users'>('rates');
+  const [activeSubTab, setActiveSubTab] = useState<'rates' | 'system' | 'users' | 'account'>('rates');
 
   // Rates Form State
   const [globalRate, setGlobalRate] = useState(rates.global);
@@ -62,6 +63,14 @@ export const Settings: React.FC<SettingsProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<'admin' | 'staff'>('admin');
   const [userError, setUserError] = useState('');
+
+  // Change Password Form State
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPasswordVal, setNewPasswordVal] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   // File Input Ref for Import
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -114,6 +123,43 @@ export const Settings: React.FC<SettingsProps> = ({
       })
       .catch(err => {
         alert(err.message || 'Error deleting user account');
+      });
+  };
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPassword || !newPasswordVal || !confirmPassword) {
+      setPasswordError('All password fields are required.');
+      setPasswordSuccess('');
+      return;
+    }
+    if (newPasswordVal !== confirmPassword) {
+      setPasswordError('New passwords do not match.');
+      setPasswordSuccess('');
+      return;
+    }
+    if (newPasswordVal.length < 4) {
+      setPasswordError('New password must be at least 4 characters long.');
+      setPasswordSuccess('');
+      return;
+    }
+
+    setPasswordError('');
+    setPasswordSuccess('');
+    setPasswordLoading(true);
+
+    api.changePassword(currentPassword, newPasswordVal)
+      .then(() => {
+        setPasswordSuccess('🎉 Password updated successfully!');
+        setCurrentPassword('');
+        setNewPasswordVal('');
+        setConfirmPassword('');
+      })
+      .catch(err => {
+        setPasswordError(err.message || 'Error updating password. Verify your current password.');
+      })
+      .finally(() => {
+        setPasswordLoading(false);
       });
   };
 
@@ -198,6 +244,14 @@ export const Settings: React.FC<SettingsProps> = ({
             User Accounts
           </button>
         )}
+        <button 
+          className={`btn ${activeSubTab === 'account' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+          onClick={() => setActiveSubTab('account')}
+        >
+          <Lock size={16} />
+          Change Password
+        </button>
       </div>
 
       {/* Rates & Financials */}
@@ -522,6 +576,78 @@ export const Settings: React.FC<SettingsProps> = ({
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password */}
+      {activeSubTab === 'account' && (
+        <div style={{ maxWidth: '500px' }}>
+          <div className="glass-card">
+            <h4 style={{ marginBottom: '16px', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Lock size={18} color="var(--primary)" />
+              Change Password
+            </h4>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '20px' }}>
+              Update your account password. Once updated, you will need to use the new password the next time you log in.
+            </p>
+
+            {passwordError && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '10px', borderRadius: '6px', color: '#f87171', fontSize: '0.8rem', marginBottom: '16px' }}>
+                {passwordError}
+              </div>
+            )}
+
+            {passwordSuccess && (
+              <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '10px', borderRadius: '6px', color: '#34d399', fontSize: '0.8rem', marginBottom: '16px' }}>
+                {passwordSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleChangePassword}>
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label htmlFor="current-password">Current Password</label>
+                <input 
+                  type="password" 
+                  id="current-password" 
+                  className="form-control"
+                  required
+                  placeholder="Enter current password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label htmlFor="new-password-val">New Password</label>
+                <input 
+                  type="password" 
+                  id="new-password-val" 
+                  className="form-control"
+                  required
+                  placeholder="Enter new password (min. 4 characters)"
+                  value={newPasswordVal}
+                  onChange={(e) => setNewPasswordVal(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
+                <label htmlFor="confirm-password">Confirm New Password</label>
+                <input 
+                  type="password" 
+                  id="confirm-password" 
+                  className="form-control"
+                  required
+                  placeholder="Re-enter new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={passwordLoading}>
+                {passwordLoading ? 'Updating...' : 'Update Password'}
+              </button>
+            </form>
           </div>
         </div>
       )}
