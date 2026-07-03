@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SearchableSelect } from './SearchableSelect';
 import { PreOrder, Customer, Product, PreOrderItem } from '../types';
 import { 
   Plus, 
@@ -651,19 +652,21 @@ export const PreOrders: React.FC<PreOrdersProps> = ({
                   ) : (
                     <div className="form-group" style={{ marginBottom: '8px' }}>
                       <label style={{ fontSize: '0.75rem' }}>Select Product</label>
-                      <select 
-                        className="form-control"
-                        required
+                      <SearchableSelect
+                        options={products
+                          .filter(p => p.category === category)
+                          .map(p => ({
+                            value: p.id,
+                            label: p.name,
+                            sublabel: `${p.brand} · ${p.variant} · ${p.size}`,
+                            badge: p.remainingStock > 0 ? `Stock: ${p.remainingStock}` : 'Out of Stock',
+                            badgeColor: (p.remainingStock === 0 ? 'danger' : p.remainingStock <= 3 ? 'warning' : 'success') as 'danger' | 'warning' | 'success',
+                          }))}
                         value={productId}
-                        onChange={(e) => handleProductChange(e.target.value)}
-                      >
-                        <option value="">-- Choose Product --</option>
-                        {products.filter(p => p.category === category).map(p => (
-                          <option key={p.id} value={p.id}>
-                            {p.brand} - {p.name} ({p.variant} / {p.size})
-                          </option>
-                        ))}
-                      </select>
+                        onChange={handleProductChange}
+                        placeholder="-- Choose Product --"
+                        required
+                      />
                     </div>
                   )}
 

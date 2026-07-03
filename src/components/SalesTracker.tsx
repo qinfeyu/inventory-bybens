@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { SearchableSelect } from './SearchableSelect';
+import type { SearchableOption } from './SearchableSelect';
 import { Product, Sale, Customer } from '../types';
 import { 
   Plus, 
@@ -244,6 +246,16 @@ export const SalesTracker: React.FC<SalesTrackerProps> = ({
   // Products available to sell in this category (with stock)
   const availableProducts = products.filter(p => p.remainingStock > 0);
 
+  // Build SearchableSelect options for products
+  const productOptions: SearchableOption[] = availableProducts.map(p => ({
+    value: p.id,
+    label: p.name,
+    sublabel: `${p.brand} · ${p.variant} · ${p.size}`,
+    badge: `Stock: ${p.remainingStock}`,
+    badgeColor: p.remainingStock === 0 ? 'danger' : p.remainingStock <= 3 ? 'warning' : 'success',
+    disabled: p.remainingStock === 0,
+  }));
+
   return (
     <div className="fade-in-section">
       <div className="transaction-flow-grid">
@@ -260,19 +272,14 @@ export const SalesTracker: React.FC<SalesTrackerProps> = ({
               {/* Product Select */}
               <div className="form-group">
                 <label htmlFor="sale-product">Select Product</label>
-                <select 
-                  id="sale-product" 
-                  className="form-control"
+                <SearchableSelect
+                  id="sale-product"
+                  options={productOptions}
                   value={productId}
-                  onChange={(e) => handleProductChange(e.target.value)}
-                >
-                  <option value="">-- Choose {filterCategory} --</option>
-                  {availableProducts.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.variant} / {p.size}) - Stock: {p.remainingStock}
-                    </option>
-                  ))}
-                </select>
+                  onChange={handleProductChange}
+                  placeholder={`-- Choose ${filterCategory} --`}
+                  required
+                />
               </div>
 
               {/* Qty & Price */}
