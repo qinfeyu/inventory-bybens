@@ -11,11 +11,12 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Initialize database
-dbHelper.initDb().catch(err => {
-  console.error('Failed to initialize database:', err);
-  process.exit(1);
-});
+// Initialize database (only locally for SQLite, Supabase uses manual schema execution)
+if (!process.env.DATABASE_URL) {
+  dbHelper.initDb().catch(err => {
+    console.error('Failed to initialize local SQLite database:', err);
+  });
+}
 
 // --- API Routes ---
 
