@@ -1485,19 +1485,17 @@ h1, h2, h3, h4, h5, h6 {
 }
 .ss-chevron-up { transform: rotate(180deg); }
 
-/* Dropdown panel */
+/* Dropdown panel — position set by portal inline style */
 .ss-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: 500;
   background: #111827;
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: var(--border-radius-md);
   box-shadow: 0 16px 48px rgba(0,0,0,0.7);
   animation: fadeIn 0.15s ease-out;
   overflow: hidden;
+  max-height: 340px;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Search row inside dropdown */
@@ -1609,11 +1607,6 @@ h1, h2, h3, h4, h5, h6 {
 /* Mobile adjustments */
 @media (max-width: 768px) {
   .ss-dropdown {
-    position: fixed;
-    top: auto;
-    bottom: calc(72px + env(safe-area-inset-bottom, 0px) + 8px);
-    left: 12px;
-    right: 12px;
     max-height: 55vh;
     border-radius: var(--border-radius-lg);
     box-shadow: 0 -8px 40px rgba(0,0,0,0.8);
