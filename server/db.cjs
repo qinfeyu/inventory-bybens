@@ -10,9 +10,22 @@ if (usePostgres) {
   const { Pool } = require('pg');
   pgPool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: false },
+    max: 2, // Keep connection count very low per instance to respect Supabase 15 pool size limit
+    idleTimeoutMillis: 10000, // Close idle connections after 10 seconds
+    connectionTimeoutMillis: 5000, // Wait up to 5 seconds to connect before failing
   });
-  console.log('Database Client: Connected to Supabase PostgreSQL');
+  console.log('Database Client: Connected to Supabase PostgreSQL (Max pool size: 2)');
+
+  const cleanExit = () => {
+    console.log('Shutting down database pool...');
+    pgPool.end(() => {
+      console.log('Database pool closed.');
+      process.exit(0);
+    });
+  };
+  process.on('SIGINT', cleanExit);
+  process.on('SIGTERM', cleanExit);
 } else {
   const sqlite3 = eval("require('sqlite3')").verbose();
   const dbPath = path.join(__dirname, '../database.sqlite');
